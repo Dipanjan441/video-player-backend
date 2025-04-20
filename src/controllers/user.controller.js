@@ -17,24 +17,32 @@ export const registerUser = asyncHandler(async(req,res)=>{
     }
 
     //duplicate entry check
-    const duplicateUser = User.findOne({
+    const duplicateUser = await User.findOne({
         $or: [{userName},{email}]
     })
     if(duplicateUser) {
-        throw new ApiError(409,"User name or Email already exist, it should be unique")
+        throw new ApiError(409,"User name and Email already exist, it should be unique")
     }
 
     //file upload
+    console.log("files",req.files);
     const avatarLocalPath = req.files?.avatar[0]?.path;
-    const coverImageLocalPath = req.files?.coverImage[0]?.path;
+    const coverImageLocalPath = req.files?.coverImage?.[0]?.path;
     if(!avatarLocalPath) {
         throw new ApiError(400,"Avatart image is required")
     }
-    //file upload in cloundinary
+    //mandatory avatar file upload in cloundinary
     const avatar = await uploadOnCloudinary(avatarLocalPath);
-    const coverImage = await uploadOnCloudinary(coverImageLocalPath);
     if(!avatar){
-        throw new ApiError(500,"Something went wrong while uploading vatar image into server");
+        throw new ApiError(500,"Something went wrong while uploading avatar image into server");
+    }
+    //optional coverImage file upload in cloudinary
+    let coverImage = null;
+    if(coverImageLocalPath) {
+        const coverImage = await uploadOnCloudinary(coverImageLocalPath);
+        if(!coverImage) {
+            throw new ApiError(500, "Something went wrong while uploading coverImage into server")
+        }
     }
 
     //user creation in db
@@ -46,14 +54,14 @@ export const registerUser = asyncHandler(async(req,res)=>{
         coverImage: coverImage?.url || null,
         password
     });
-    const createdUser = await User.findById(user._id).selected("-password -refreshToken");
+    const createdUser = await User.findById(user._id).select("-password -refreshToken");
     if(!createdUser) {
-        throw new ApiError(500,"Something went wrong while registering the user in");
+        throw new ApiError(500,"Something went wrong while registering the user");
     }
 
     //send structured response
     return res.status(201).json(
-        new ApiResponse(201,user,`${user._id} created successfuly`)
+        new ApiResponse(201,createdUser,`${user._id} created successfuly`)
     )
 
     // console.log("username",userName);
